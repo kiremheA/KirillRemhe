@@ -44,6 +44,20 @@ public:
         positionX = centerX + orbitMajorAxis * std::cos(orbitSpeed * time);
         positionY = centerY + orbitMinorAxis * std::sin(orbitSpeed * time);
     }
+
+    void drawOrbit(sf::RenderWindow& window) const {
+        const int numPoints = 80;
+        for (int i = 0; i < numPoints; ++i) {
+            double angle = i * 2 * M_PI / numPoints;
+            double x = centerX + orbitMajorAxis * std::cos(angle);
+            double y = centerY + orbitMinorAxis * std::sin(angle);
+
+            sf::CircleShape dot(1);
+            dot.setFillColor(sf::Color(150, 150, 150)); 
+            dot.setPosition(x, y);
+            window.draw(dot);
+        }
+    }
 };
 
 class Star : public SpaceObject {
@@ -77,6 +91,9 @@ public:
 
     void draw(sf::RenderWindow& window) {
         for (auto obj : objects) {
+            if (Planet* planet = dynamic_cast<Planet*>(obj)) {
+                planet->drawOrbit(window);
+            }
             obj->draw(window);
         }
     }
