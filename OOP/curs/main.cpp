@@ -133,6 +133,7 @@ int main() {
     solarSystem.addObject(std::make_unique<Planet<>>("Нептун", 8.0, sf::Color(0, 0, 139), centerX + 350.0, centerY, 2 * M_PI / (165 * 365), 350.0, 320.0, centerX, centerY));
 
     sf::Clock clock;
+    double timeScale = 1.0 / 86400.0;
     double totalTime = 0.0;
 
     while (window.isOpen()) {
@@ -141,10 +142,21 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
+            if (event.type == sf::Event::KeyPressed) {
+                if (event.key.code == sf::Keyboard::Up) {
+                    timeScale *= 2.0; 
+                }
+                if (event.key.code == sf::Keyboard::Down) {
+                    timeScale /= 2.0; 
+                    if (timeScale < 1.0 / 86400.0) {
+                        timeScale = 1.0 / 86400.0;
+                    }
+                }
+            }
         }
 
         double elapsedSeconds = clock.restart().asSeconds();
-        totalTime += elapsedSeconds;
+        totalTime += elapsedSeconds * timeScale;
 
         solarSystem.update(totalTime);
 
