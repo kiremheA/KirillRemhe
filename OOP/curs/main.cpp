@@ -1,21 +1,28 @@
 #include <SFML/Graphics.hpp>
 #include <vector>
+#include <memory>
 #include <cmath>
+#include <string>
 #include <iostream>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
+template <typename T = double>
 class SpaceObject {
 protected:
-    double size;
+    T size;
     sf::Color color;
-    double positionX, positionY;
+    T positionX, positionY;
 
 public:
-    SpaceObject(double size, const sf::Color& color, double posX, double posY)
+    SpaceObject(T size = 10, const sf::Color& color = sf::Color::White, T posX = 0, T posY = 0)
         : size(size), color(color), positionX(posX), positionY(posY) {}
 
     virtual ~SpaceObject() {}
 
-    virtual void updatePosition(double time) = 0;
+    virtual void updatePosition(T time) = 0;
 
     virtual void draw(sf::RenderWindow& window) const {
         sf::CircleShape shape(size);
@@ -24,74 +31,83 @@ public:
         shape.setPosition(positionX, positionY);
         window.draw(shape);
     }
+
+    virtual std::string getName() const { return "SpaceObject"; }
 };
 
-class Planet : public SpaceObject {
+template <typename T = double>
+class Planet : public SpaceObject<T> {
 private:
-    double orbitSpeed;
-    double orbitMajorAxis;
-    double orbitMinorAxis;
-    double centerX, centerY;
+    T orbitSpeed;
+    T orbitMajorAxis;
+    T orbitMinorAxis;
+    T centerX, centerY;
+    std::string name;
 
 public:
-    Planet(double size, const sf::Color& color, double posX, double posY,
-           double speed, double majorAxis, double minorAxis, double centerX, double centerY)
-        : SpaceObject(size, color, posX, posY), orbitSpeed(speed),
+    Planet(const std::string& name, T size = 5, const sf::Color& color = sf::Color::Green,
+           T posX = 0, T posY = 0, T speed = 0.01, T majorAxis = 50, T minorAxis = 40,
+           T centerX = 0, T centerY = 0)
+        : SpaceObject<T>(size, color, posX, posY), orbitSpeed(speed),
           orbitMajorAxis(majorAxis), orbitMinorAxis(minorAxis),
-          centerX(centerX), centerY(centerY) {}
+          centerX(centerX), centerY(centerY), name(name) {}
 
-    void updatePosition(double time) override {
-        positionX = centerX + orbitMajorAxis * std::cos(orbitSpeed * time);
-        positionY = centerY + orbitMinorAxis * std::sin(orbitSpeed * time);
+    void updatePosition(T time) override {
+        this->positionX = centerX + orbitMajorAxis * std::cos(orbitSpeed * time);
+        this->positionY = centerY + orbitMinorAxis * std::sin(orbitSpeed * time);
     }
 
     void drawOrbit(sf::RenderWindow& window) const {
         const int numPoints = 80;
-        for (int i = 0; i < numPoints; ++i) {
-            double angle = i * 2 * M_PI / numPoints;
-            double x = centerX + orbitMajorAxis * std::cos(angle);
-            double y = centerY + orbitMinorAxis * std::sin(angle);
+        sf::VertexArray orbit(sf::LineStrip, numPoints + 1);
 
-            sf::CircleShape dot(1);
-            dot.setFillColor(sf::Color(150, 150, 150)); 
-            dot.setPosition(x, y);
-            window.draw(dot);
+        for (int i = 0; i <= numPoints; ++i) {
+            T angle = i * 2 * M_PI / numPoints;
+            T x = centerX + orbitMajorAxis * std::cos(angle);
+            T y = centerY + orbitMinorAxis * std::sin(angle);
+            orbit[i].position = sf::Vector2f(x, y);
+            orbit[i].color = sf::Color(150, 150, 150);
         }
+
+        window.draw(orbit);
     }
+
+    std::string getName() const override { return name; }
 };
 
-class Star : public SpaceObject {
-public:
-    Star(double size, const sf::Color& color, double posX, double posY)
-        : SpaceObject(size, color, posX, posY) {}
+template <typename T = double>
+class Star : public SpaceObject<T> {
+private:
+    std::string name;
 
-    void updatePosition(double time) override {}
+public:
+    Star(const std::string& name, T size = 20, const sf::Color& color = sf::Color::Yellow, T posX = 0, T posY = 0)
+        : SpaceObject<T>(size, color, posX, posY), name(name) {}
+
+    void updatePosition(T time) override {}
+
+    std::string getName() const override { return name; }
 };
 
 class SolarSystem {
 private:
-    std::vector<SpaceObject*> objects;
+    std::vector<std::unique_ptr<SpaceObject<double>>> objects;
 
 public:
-    ~SolarSystem() {
-        for (auto obj : objects) {
-            delete obj;
-        }
-    }
-
-    void addObject(SpaceObject* obj) {
-        objects.push_back(obj);
+    void addObject(std::unique_ptr<SpaceObject<double>> obj) {
+        std::cout << "Добавлен объект: " << obj->getName() << std::endl;
+        objects.push_back(std::move(obj));
     }
 
     void update(double time) {
-        for (auto obj : objects) {
+        for (auto& obj : objects) {
             obj->updatePosition(time);
         }
     }
 
     void draw(sf::RenderWindow& window) {
-        for (auto obj : objects) {
-            if (Planet* planet = dynamic_cast<Planet*>(obj)) {
+        for (const auto& obj : objects) {
+            if (auto* planet = dynamic_cast<Planet<double>*>(obj.get())) {
                 planet->drawOrbit(window);
             }
             obj->draw(window);
@@ -100,37 +116,24 @@ public:
 };
 
 int main() {
-    sf::RenderWindow window(sf::VideoMode(1000, 800), "Realistic Solar System Simulation");
+    sf::RenderWindow window(sf::VideoMode(1920, 1080), "Realistic Solar System Simulation");
 
     SolarSystem solarSystem;
 
-    const double centerX = 500.0;
-    const double centerY = 400.0;
+    const double centerX = 960.0;
+    const double centerY = 540.0;
 
-    double timeScale = 1.0 / 86400.0;
-
-    Star* sun = new Star(30.0, sf::Color::Yellow, centerX, centerY);
-    Planet* mercury = new Planet(4.0, sf::Color(169, 169, 169), centerX + 40.0, centerY, 2 * M_PI / 88, 40.0, 35.0, centerX, centerY);
-    Planet* venus = new Planet(6.0, sf::Color(255, 223, 0), centerX + 70.0, centerY, 2 * M_PI / 225, 70.0, 60.0, centerX, centerY);
-    Planet* earth = new Planet(8.0, sf::Color::Blue, centerX + 100.0, centerY, 2 * M_PI / 365, 100.0, 90.0, centerX, centerY);
-    Planet* mars = new Planet(6.0, sf::Color::Red, centerX + 150.0, centerY, 2 * M_PI / 687, 150.0, 130.0, centerX, centerY);
-    Planet* jupiter = new Planet(12.0, sf::Color(255, 165, 0), centerX + 200.0, centerY, 2 * M_PI / (12 * 365), 200.0, 180.0, centerX, centerY);
-    Planet* saturn = new Planet(10.0, sf::Color(210, 180, 140), centerX + 250.0, centerY, 2 * M_PI / (29 * 365), 250.0, 220.0, centerX, centerY);
-    Planet* uranus = new Planet(8.0, sf::Color(135, 206, 235), centerX + 300.0, centerY, 2 * M_PI / (84 * 365), 300.0, 270.0, centerX, centerY);
-    Planet* neptune = new Planet(8.0, sf::Color(0, 0, 139), centerX + 350.0, centerY, 2 * M_PI / (165 * 365), 350.0, 320.0, centerX, centerY);
-
-    solarSystem.addObject(sun);
-    solarSystem.addObject(mercury);
-    solarSystem.addObject(venus);
-    solarSystem.addObject(earth);
-    solarSystem.addObject(mars);
-    solarSystem.addObject(jupiter);
-    solarSystem.addObject(saturn);
-    solarSystem.addObject(uranus);
-    solarSystem.addObject(neptune);
+    solarSystem.addObject(std::make_unique<Star<>>("Солнце", 30.0, sf::Color::Yellow, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Меркурий", 4.0, sf::Color(169, 169, 169), centerX + 40.0, centerY, 2 * M_PI / 88, 40.0, 35.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Земля", 8.0, sf::Color::Blue, centerX + 100.0, centerY, 2 * M_PI / 365, 100.0, 90.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Марс", 6.0, sf::Color::Red, centerX + 150.0, centerY, 2 * M_PI / 687, 150.0, 130.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Юпитер", 12.0, sf::Color(255, 165, 0), centerX + 200.0, centerY, 2 * M_PI / (12 * 365), 200.0, 180.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Сатурн", 10.0, sf::Color(210, 180, 140), centerX + 250.0, centerY, 2 * M_PI / (29 * 365), 250.0, 220.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Уран", 8.0, sf::Color(135, 206, 235), centerX + 300.0, centerY, 2 * M_PI / (84 * 365), 300.0, 270.0, centerX, centerY));
+    solarSystem.addObject(std::make_unique<Planet<>>("Нептун", 8.0, sf::Color(0, 0, 139), centerX + 350.0, centerY, 2 * M_PI / (165 * 365), 350.0, 320.0, centerX, centerY));
 
     sf::Clock clock;
-    double totalTime = 0.0;  
+    double totalTime = 0.0;
 
     while (window.isOpen()) {
         sf::Event event;
@@ -138,21 +141,10 @@ int main() {
             if (event.type == sf::Event::Closed) {
                 window.close();
             }
-            if (event.type == sf::Event::KeyPressed) {
-                if (event.key.code == sf::Keyboard::Up) {
-                    timeScale *= 2.0; 
-                }
-                if (event.key.code == sf::Keyboard::Down) {
-                    timeScale /= 2.0; 
-                    if (timeScale < 1.0 / 86400.0) {
-                        timeScale = 1.0 / 86400.0;
-                    }
-                }
-            }
         }
 
         double elapsedSeconds = clock.restart().asSeconds();
-        totalTime += elapsedSeconds * timeScale;
+        totalTime += elapsedSeconds;
 
         solarSystem.update(totalTime);
 
